@@ -176,7 +176,7 @@ function uploadMediaItems() {
 
 - [Method: mediaItems.batchCreate](https://developers.google.com/photos/library/reference/rest/v1/mediaItems/batchCreate)
 
-> IMPORTANT
+> IMPORTANT:
 > If the error of `No permission to add media items to this album.` occurs, please create the album by the script. [The official document](https://developers.google.com/photos/library/guides/upload-media#creating-media-item) says as follows.
 >
 > ```
