@@ -117,7 +117,7 @@ function uploadMediaItems(object) {
 
       GetMediaItemList() {
         var mediaItems, pageToken, params, res, url;
-        url = "https://photoslibrary.googleapis.com/v1/mediaItems";
+        url = "https://photoslibrary.googleapis.com/v1/mediaItems?fields=*&pageSize=100";
         params = {
           method: "get",
           muteHttpExceptions: true,
