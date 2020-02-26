@@ -61,7 +61,7 @@ In order to use this library, please install this library as follows.
 
    - You can use this library for the GAS project of both the standalone type and the container-bound script type.
 
-1. [Install DateFinder library](https://developers.google.com/apps-script/guides/libraries).
+1. [Install this library](https://developers.google.com/apps-script/guides/libraries).
 
    - Library's project key is **`1lGrUiaweQjQwVV_QwWuJDJVbCuY2T0BfVphw6VmT85s9LJFntav1wzs9`**.
 
