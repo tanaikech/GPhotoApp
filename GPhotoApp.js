@@ -1,6 +1,4 @@
-// based on https://raw.githubusercontent.com/tanaikech/GPhotoApp/master/GPhotoApp.js
-
-const PhotosApp = new (function () {
+const PhotoApp = new (function () {
 
   // I chose the older-style `new (function() {})()` syntax for
   // encpsulating this class so that the interface is more consistent with
@@ -11,7 +9,10 @@ const PhotosApp = new (function () {
     const pairs = [];
     for (const key of Object.keys(obj)) {
       const value = obj[key];
-      if (value.constructor === Array) {
+      if (typeof value === "undefined") {
+        continue;
+      }
+      if ((typeof value === "object") && (value.constructor === Array)) {
         for (const el of value) {
           pairs.push(encodeURIComponent(key) + '=' + encodeURIComponent(el.toString()));
         }
@@ -22,7 +23,7 @@ const PhotosApp = new (function () {
     }
     return pairs.join('&');
   };
-
+  
   const _getAccessToken = () => {
     if (!_accessToken) {
       _accessToken = ScriptApp.getOAuthToken();
@@ -30,24 +31,84 @@ const PhotosApp = new (function () {
     return _accessToken;
   };
 
-  const _getUploadToken = (opts) => {
+  const _getUploadToken = ({filename, blob}) => {
     const params = {
       url: "https://photoslibrary.googleapis.com/v1/uploads",
       method: "POST",
       muteHttpExceptions: true,
       headers: {
         "authorization": `Bearer ${_getAccessToken()}`,
-        "x-goog-upload-file-name": opts.filename,
+        "x-goog-upload-file-name": filename,
         "x-goog-upload-protocol": "raw"
       },
       contentType: "application/octet-stream",
-      payload: opts.blob
+      payload: blob
     };
     const res = UrlFetchApp.fetchAll([params])[0];
     if (res.getResponseCode() !== 200) {
       throw new Error(res.getContentText());
     }
     return res.getContentText();
+  };
+  
+  const _apiCall = ({path, params, payload}) => {
+    let url = `https://photoslibrary.googleapis.com/v1/${path}`;
+    if (params) {
+      const q = encodeQueryString(params);
+      if (q.length) {
+        url += '?' + q;
+      }
+    }
+    let request = {
+      method: "GET",
+      muteHttpExceptions: true,
+      headers: {
+        "authorization": `Bearer ${_getAccessToken()}`
+      }
+    }
+    if (payload) {
+      request = {
+        ...request,
+        method: "POST",
+        contentType: "application/json",
+        payload: JSON.stringify(payload)
+      };
+    }
+
+    response = UrlFetchApp.fetch(url, request);
+
+    if (response.getResponseCode() !== 200) {
+      throw new Error(response.getContentText());
+    }
+    return JSON.parse(response.getContentText());
+  };
+
+  function* _paginatedApiCall({path, params, payload, ...opts}) {
+    if (!payload) {
+      params = params || {};
+    }
+
+    let pageToken = undefined;
+    while (true) {
+      // attach pageToken to payload body or query params, depending on request type
+      if (payload) {
+        payload = {...payload, pageToken: pageToken};
+      }
+      else {
+        params = {...params, pageToken: pageToken};
+      }
+      const body = _apiCall({path, params, payload, ...opts});
+      if (Object.keys(body).length === 0) {
+        break;
+      }
+
+      yield body;
+      
+      pageToken = body.nextPageToken;
+      if (!pageToken) {
+        break;
+      }
+    }
   };
 
   this.createAlbum = (opts) => {
@@ -63,189 +124,81 @@ const PhotosApp = new (function () {
       };
     }
 
-    const url = "https://photoslibrary.googleapis.com/v1/albums";
-    const params = {
-      url: url,
-      method: "POST",
-      muteHttpExceptions: true,
-      headers: {
-        "authorization": `Bearer ${_getAccessToken()}`
-      },
-      payload: JSON.stringify(opts),
-      contentType: "application/json"
-    };
-
-    res = UrlFetchApp.fetchAll([params])[0];
-
-    if (res.getResponseCode() !== 200) {
-      throw new Error(res.getContentText());
-    }
-    return JSON.parse(res.getContentText());
-  }
-
-  this.getAlbumList = (excludeNonAppCreatedData) => {
-    if (!excludeNonAppCreatedData) {
-      excludeNonAppCreatedData = false;
-    }
-    const q = encodeQueryString({
-      fields: '*',
-      pageSize: 50,
-      excludeNonAppCreatedData: excludeNonAppCreatedData
+    return _apiCall({
+      path: "albums", 
+      payload: opts
     });
-    const url = `https://photoslibrary.googleapis.com/v1/albums?${q}`;
-    const params = {
-      method: "GET",
-      muteHttpExceptions: true,
-      headers: {
-        "authorization": `Bearer ${_getAccessToken()}`
-      }
-    };
-    const albums = [];
-
-    let pageToken = "";
-    while (true) {
-      params.url = url + (pageToken ? `&nextPageToken=${pageToken}` : "");
-      const res = UrlFetchApp.fetchAll([params])[0];
-      const r = JSON.parse(res.getContentText());
-      if (res.getResponseCode() !== 200) {
-        throw new Error(res.getContentText());
-      }
-      Array.prototype.push.apply(albums, r.albums);
-
-      pageToken = r.nextPageToken;
-      if (!pageToken) {
-        break;
-      }
-    }
-
-    return albums;
   };
 
-  this.getMediaItemsList = function* () {
-    const q = encodeQueryString({
-      fields: '*',
-      pageSize: 100
+  this.getAlbumList = function* (opts) {
+    const pages = _paginatedApiCall({
+      path: "albums",
+      params: {
+        fields: '*',
+        pageSize: 50,
+        excludeNonAppCreatedData: opts.excludeNonAppCreatedData
+      }
     });
-    const url = "https://photoslibrary.googleapis.com/v1/mediaItems?" + q;
-    const params = {
-      method: "GET",
-      muteHttpExceptions: true,
-      headers: {
-        "authorization": `Bearer ${_getAccessToken()}`
-      }
-    };
-
-    let pageToken = null;
-    while (true) {
-      params.url = url + (pageToken ? `&pageToken=${pageToken}` : "");
-      const res = UrlFetchApp.fetchAll([params])[0];
-      const r = JSON.parse(res.getContentText());
-      if (res.getResponseCode() !== 200) {
-        throw new Error(res.getContentText());
-      }
-      if (typeof r.mediaItems === "undefined") {
-        break;
-      }
-
-      for (const mediaItem of r.mediaItems) {
-        yield mediaItem;
-      }
-
-      pageToken = r.nextPageToken;
-      if (!pageToken) {
-        break;
+    for (const page of pages) {
+      for (const album of page.albums) {
+        yield album;
       }
     }
-  }
+  };
+
+  this.getMediaItemList = function* () {
+    const pages = _paginatedApiCall({
+      path: "mediaItems",
+      params: {
+        fields: '*',
+        pageSize: 100
+      }
+    });    
+    for (const page of pages) {
+      for (const mediaItem of page.mediaItems) {
+        yield mediaItem;
+      }
+    }
+  };
 
   this.searchMediaItems = function* (opts) {
-    const url = "https://photoslibrary.googleapis.com/v1/mediaItems:search";
-    const params = {
-      url: url,
-      method: "POST",
-      muteHttpExceptions: true,
-      headers: {
-        "authorization": `Bearer ${_getAccessToken()}`
-      },
-      contentType: "application/json"      
+    opts = {
+      pageSize: 100,
+      ...(opts || {})
     };
-
-    let pageToken = undefined;
-    while (true) {
-      params.payload = JSON.stringify({...opts, pageToken: pageToken});
-      
-      const res = UrlFetchApp.fetchAll([params])[0];
-      const r = JSON.parse(res.getContentText());
-      if (res.getResponseCode() !== 200) {
-        throw new Error(res.getContentText());
-      }
-      if (typeof r.mediaItems === "undefined") {
-        break;
-      }
-
-      for (const mediaItem of r.mediaItems) {
+    const pages = _paginatedApiCall({
+      path: "mediaItems:search",
+      payload: opts
+    });
+    for (const page of pages) {
+      for (const mediaItem of page.mediaItems) {
         yield mediaItem;
       }
-
-      pageToken = r.nextPageToken;
-      if (!pageToken) {
-        break;
-      }
     }
-  }
+  };
 
   this.getMediaItems = (opts) => {
-    
-    if (!opts || !("mediaItemIds" in opts)) {
-      throw new Error("Please input resource object.");
-    }
-    const url = "https://photoslibrary.googleapis.com/v1/mediaItems:batchGet";
-    const q = encodeQueryString({"mediaItemIds": opts.mediaItemIds});
-    
-    const params = {
-      url: url + '?' + q,
-      method: "GET",
-      muteHttpExceptions: true,
-      headers: {
-        "authorization": `Bearer ${_getAccessToken()}`
+    return _apiCall({
+      path: "mediaItems:batchGet",
+      params: {
+        mediaItemIds: opts.mediaItemIds
       }
-    };
-    const res = UrlFetchApp.fetchAll([params])[0];
-    if (res.getResponseCode() !== 200) {
-      throw new Error(res.getContentText());
-    }
-    return JSON.parse(res.getContentText());
-  }
-
+    });
+  };
 
   this.getMediaItem = (opts) => {
+
+    return _apiCall({
+      path: `mediaItems/${encodeURIComponent(opts.mediaItemId)}`
+    });
     
-    if (!opts || !("mediaItemId" in opts)) {
-      throw new Error("Please input resource object.");
-    }
-    const url = "https://photoslibrary.googleapis.com/v1/mediaItems/" + encodeURIComponent(opts.mediaItemId);
-    
-    const params = {
-      url: url,
-      method: "GET",
-      muteHttpExceptions: true,
-      headers: {
-        "authorization": `Bearer ${_getAccessToken()}`
-      }
-    };
-    const res = UrlFetchApp.fetchAll([params])[0];
-    if (res.getResponseCode() !== 200) {
-      throw new Error(res.getContentText());
-    }
-    return JSON.parse(res.getContentText());
-  }
+  };
 
   this.getMediaItemBlob = (mediaItem) => {
     // TODO : support other baseUrl modifications, as per
     //        https://developers.google.com/photos/library/guides/access-media-items#base-urls
     const url = mediaItem.baseUrl + "=d";
-    const params = {
-      url: url,
+    const request = {
       method: "GET",
       muteHttpExceptions: true,
       headers: {
@@ -253,56 +206,37 @@ const PhotosApp = new (function () {
       }
     };
 
-    const res = UrlFetchApp.fetchAll([params])[0];
+    const response = UrlFetchApp.fetch(url, request);
 
-    if (res.getResponseCode() !== 200) {
-      throw new Error(res.getContentText());
+    if (response.getResponseCode() !== 200) {
+      throw new Error(response.getContentText());
     }
-    return res.getBlob();
+    return response.getBlob();
   }
 
   this.uploadMediaItems = (opts) => {
     // NOTE : Media items can be created only within the albums created by your app.
-
     if (!opts) {
       throw new Error("Please input resource object.");
     }
 
-    const newMediaItems = opts.items.map((e) => (
+    const newMediaItems = opts.items.map((item) => (
       {
-        description: e.description,
+        description: item.description,
         simpleMediaItem: {
-          fileName: e.filename,
-          uploadToken: _getUploadToken(e)
+          fileName: item.filename,
+          uploadToken: _getUploadToken(item)
         }
       }
     ));
 
-    const url = "https://photoslibrary.googleapis.com/v1/mediaItems:batchCreate";
-    
-    const payload = {
-      albumId: opts.albumId,
-      newMediaItems: newMediaItems
-    };
-    const params = {
-      url: url,
-      method: "POST",
-      muteHttpExceptions: true,
-      headers: {
-        "authorization": `Bearer ${_getAccessToken()}`
-      },
-      contentType: "application/json",
-      payload: JSON.stringify(payload)
-    };
-    
-    const res = UrlFetchApp.fetchAll([params])[0];
-
-    if (res.getResponseCode() !== 200) {
-      throw new Error(res.getContentText());
-    }
-    return JSON.parse(res.getContentText());
-  }
-
-  this.name = "PhotosApp";
+    return _apiCall({
+      path: "mediaItems:batchCreate",
+      payload: {
+        albumId: opts.albumId,
+        newMediaItems: newMediaItems
+      }
+    });
+  };
 
 })();
