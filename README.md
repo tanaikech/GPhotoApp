@@ -1,164 +1,145 @@
 # GPhotoApp
 
-<a name="top"></a>
-[![MIT License](http://img.shields.io/badge/license-MIT-blue.svg?style=flat)](LICENCE)
+
+[![MIT License](http://img.shields.io/badge/license-MIT-blue.svg?style=flat)](LICENSE)
 
 <a name="overview"></a>
-
 # Overview
 
-**This is a GAS library for retrieving and creating the albums and media items using Google Photo API using Google Apps Script (GAS).**
+A Google Apps Script (GAS) library exposing the Google Photos Library API.
+
+Based on https://github.com/tanaikech/GPhotoApp
+
 
 <a name="description"></a>
 
 ## Description
 
-In the current stage, Google Photo API is not included in Advanced Google services. But in order to use Google Photo API with Google Apps Script, I created this as a GAS library. So in the current stage, in order to use this library, the following flow is required.
+Currently, the Photos Library API is not available under [Advanced Google services](https://developers.google.com/apps-script/guides/services/advanced). This library enables access via the `UrlFetchApp` service.
 
-1. Link Cloud Platform Project to Google Apps Script Project.
-2. Enable Google Photo API at API console
-3. Set the scopes to the manifest file of the Google Apps Script.
+## Usage
 
-When above flow is done, the following functions can be used with this library.
+1. Copy + paste the contents of `PhotoApp.js` to a new file in your Apps Script project.
+1. Link the Cloud Platform project to your Google Apps Script project: Apps Script Sidebar > Project Settings > Google Cloud Platform (GCP) Project. See also [here](https://gist.github.com/tanaikech/e945c10917fac34a9d5d58cad768832c).
+1. [Enable the Photos Library API at the GCP Console](https://console.developers.google.com/apis/library/photoslibrary.googleapis.com)
+1. Edit `appsscript.json` in your project to include the scopes required for Google Photos access (see included sample file):
 
-1. Create new album.
-2. Get album list.
-3. Get media item list.
-4. Get media items.
-5. Upload images to album.
-
-# Library's project key
-
-```
-1lGrUiaweQjQwVV_QwWuJDJVbCuY2T0BfVphw6VmT85s9LJFntav1wzs9
+```json
+  "oauthScopes": [
+    "https://www.googleapis.com/auth/photoslibrary",
+    "https://www.googleapis.com/auth/script.external_request"
+  ]
 ```
 
-# Methods
+### Notes
 
-In the current stage, I prepared 5 methods that I required.
+  - This library uses modern Javascript. V8 runtime must be [enabled](https://developers.google.com/apps-script/guides/v8-runtime).
+  - Media items can be created only within the albums created by your app (see [here](https://developers.google.com/photos/library/guides/upload-media#creating-media-item)). Attempting to upload to an album not created by your app will result in the error: `No permission to add media items to this album`.
+  - Paginated results are returned as iterators. Use [`for...of`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for...of) to iterate over them. If you need all of them, you can use [`Array.from()`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/from).
 
-| Methods                                                 | Description             |
-| :------------------------------------------------------ | :---------------------- |
-| [createAlbum(object)](#createalbum)                     | Create new album.       |
-| [getAlbumList(excludeNonAppCreatedData)](#getalbumList) | Get album list.         |
-| [getMediaItemList()](#getmediaitemList)                 | Get media item list.    |
-| [getMediaItems(object)](#getmediaitems)                 | Get media items.        |
-| [uploadMediaItems(object)](#uploadmediaitems)           | Upload images to album. |
+
+# Documentation
+
+| Methods                                                 | Description                 |
+| :------------------------------------------------------ | :-------------------------- |
+| [createAlbum(object)](#createalbum)                     | Create new album.           |
+| [getAlbumList(excludeNonAppCreatedData)](#getalbumList) | Get album list.             |
+| [getMediaItemList()](#getmediaitemList)                 | Get media item list.        |
+| [getMediaItems(object)](#getmediaitems)                 | Get media items.            |
+| [getMediaItem(object)](#getmediaitem)                   | Gets a media item.          |
+| [getMediaItemBlob(object)](#getmediaitemblob)           | Gets data for a media item. |
+| [uploadMediaItems(object)](#uploadmediaitems)           | Upload images to album.     |
 
 <a name="usage"></a>
 
-# Usage:
-
-## 1. Linking Cloud Platform Project to Google Apps Script Project:
-
-About this, you can see the detail flow at [here](https://gist.github.com/tanaikech/e945c10917fac34a9d5d58cad768832c).
-
-## 2. Install library
-
-In order to use this library, please install this library as follows.
-
-1. Create a GAS project.
-
-   - You can use this library for the GAS project of both the standalone type and the container-bound script type.
-
-1. [Install this library](https://developers.google.com/apps-script/guides/libraries).
-
-   - Library's project key is **`1lGrUiaweQjQwVV_QwWuJDJVbCuY2T0BfVphw6VmT85s9LJFntav1wzs9`**.
-
-### IMPORTANT
-
-**This library uses V8 runtime. So please enable V8 at the script editor.**
-
-### About scopes
-
-This library use the following 2 scopes.
-
-- `https://www.googleapis.com/auth/photoslibrary`
-- `https://www.googleapis.com/auth/script.external_request`
-
-In this case, when the library is installed, these scopes are also installed.
-
-## Methods
+## Sample scripts
 
 <a name="createalbum"></a>
-
-### `createAlbum`
-
-#### Sample script
-
+### `createAlbum` ([albums.create](https://developers.google.com/photos/library/reference/rest/v1/albums/create))
 ```javascript
 function createAlbum() {
-  var resource = { album: { title: "sample title" } };
-  const res = GPhotoApp.createAlbum(resource);
+  const resource = { album: { title: "sample title" } };
+  const res = PhotoApp.createAlbum(resource);
   console.log(res);
 }
 ```
 
-- [Method: albums.create](https://developers.google.com/photos/library/reference/rest/v1/albums/create)
-
 <a name="getalbumList"></a>
-
-### `getAlbumList`
-
-#### Sample script
+### `getAlbumList` ([albums.list](https://developers.google.com/photos/library/reference/rest/v1/albums/list))
 
 ```javascript
 function getAlbumList() {
-  const excludeNonAppCreatedData = true;
-  const res = GPhotoApp.getAlbumList(excludeNonAppCreatedData);
+  const res = Array.from(PhotoApp.getAlbumList({excludeNonAppCreatedData: true}));
   console.log(res);
 }
 ```
-
-- [Method: albums.list](https://developers.google.com/photos/library/reference/rest/v1/albums/list)
 
 <a name="getmediaitemList"></a>
-
-### `getMediaItemList`
-
-#### Sample script
-
+### `getMediaItemList` ([mediaItems.list](https://developers.google.com/photos/library/reference/rest/v1/mediaItems/list))
 ```javascript
 function getMediaItemList() {
-  const res = GPhotoApp.getMediaItemList();
+  const res = Array.from(PhotoApp.getMediaItemList());
   console.log(res);
 }
 ```
 
-- [Method: mediaItems.list](https://developers.google.com/photos/library/reference/rest/v1/mediaItems/list)
+<a name="getmediaitemList"></a>
+### `searchMediaItems` ([mediaItems.search](https://developers.google.com/photos/library/reference/rest/v1/mediaItems/search))
+```javascript
+function searchMediaItems() {
+  const albumId = "###"; // Album ID
+  const res = Array.from(PhotoApp.searchMediaItems({albumId}));
+  console.log(res);
+}
+```
+
 
 <a name="getmediaitems"></a>
-
-### `getMediaItems`
-
-#### Sample script
-
+### `getMediaItems` ([mediaItems.batchGet](https://developers.google.com/photos/library/reference/rest/v1/mediaItems/batchGet))
 ```javascript
 function getMediaItems() {
-  var resource = { mediaItemIds: ["###", "###", , ,] };
-  const res = GPhotoApp.getMediaItems(resource);
+  const resource = { mediaItemIds: ["###", "###"] };
+  // Note that since the list is limited to requested items, this does not return an iterator.
+  const res = PhotoApp.getMediaItems(resource);
   console.log(res);
 }
 ```
 
-- [Method: mediaItems.batchGet](https://developers.google.com/photos/library/reference/rest/v1/mediaItems/batchGet)
+<a name="getmediaitem"></a>
+### `getMediaItem` ([mediaItems.get](https://developers.google.com/photos/library/reference/rest/v1/mediaItems/get))
+```javascript
+function getMediaItem() {
+  const id = "###";
+  const res = PhotoApp.getMediaItem({mediaItemId: id});
+  console.log(res);
+}
+```
+
+<a name="getmediaitemblob"></a>
+### `getMediaItemBlob`
+```javascript
+function getMediaItems() {
+  const id = "###";
+  const mediaItem = PhotoApp.getMediaItem({mediaItemId: id});
+  const blob = PhotoApp.getMediaItemBlob(mediaItem);
+  blob.setName(mediaItem.filename);
+  DriveApp.createFile(blob);
+  console.log(res);
+}
+```
 
 <a name="uploadmediaitems"></a>
-
-### `uploadMediaItems`
-
-#### Sample script
-
+### `uploadMediaItems` ([mediaItems.batchCreate](https://developers.google.com/photos/library/reference/rest/v1/mediaItems/batchCreate))
 ```javascript
 function uploadMediaItems() {
   const albumId = "###"; // Album ID
-  const id = "###"; // file ID
+  const fileId = "###"; // File ID
   const url = "###"; // URL of image file
   const resource = {
     albumId: albumId,
     items: [
       {
-        blob: DriveApp.getFileById(id).getBlob(),
+        blob: DriveApp.getFileById(fileId).getBlob(),
         description: "description1",
         filename: "filename1"
       },
@@ -169,60 +150,30 @@ function uploadMediaItems() {
       }
     ]
   };
-  const res = GPhotoApp.uploadMediaItems(resource);
+  const res = PhotoApp.uploadMediaItems(resource);
   console.log(JSON.stringify(res));
 }
 ```
 
-- [Method: mediaItems.batchCreate](https://developers.google.com/photos/library/reference/rest/v1/mediaItems/batchCreate)
+<a name="license"></a>
+# License
 
-> IMPORTANT:
-> If the error of `No permission to add media items to this album.` occurs, please create the album by the script. [The official document](https://developers.google.com/photos/library/guides/upload-media#creating-media-item) says as follows.
->
-> ```
-> Media items can be created only within the albums created by your app.
-> ```
->
-> In this case, please create new album by the following script, and please retrieve the album ID.
->
-> ```javascript
-> function createNewAlbum() {
->   var options = {
->     headers: { Authorization: "Bearer " + ScriptApp.getOAuthToken() },
->     payload: JSON.stringify({ album: { title: "sample title" } }),
->     contentType: "application/json",
->     method: "post"
->   };
->   var res = UrlFetchApp.fetch(
->     "https://photoslibrary.googleapis.com/v1/albums",
->     options
->   );
->   Logger.log(res);
-> }
-> ```
->
-> Also about this, when the property of `isWriteable` in the album list is `true`, the image file can be added to the album. [Ref](https://developers.google.com/photos/library/reference/rest/v1/albums)
-
-<a name="licence"></a>
-
-# Licence
-
-[MIT](LICENCE)
+[MIT](LICENSE)
 
 <a name="author"></a>
-
-# Author
-
-[Tanaike](https://tanaikech.github.io/about/)
-
-If you have any questions and commissions for me, feel free to tell me.
+# Authors
+[Tanaike](https://tanaikech.github.io/about/), [kwikwag](https://github.com/kwikwag/GPhotoApp)
 
 <a name="updatehistory"></a>
-
 # Update History
+- v1.1.0 (January 20, 2022) (kwikwag)
 
-- v1.0.0 (February 26, 2020)
+  1. Added some methods
+  2. Refactored code
+  3. Fixed broken pagination API
+  4. Minor breaking interface changes
+
+- v1.0.0 (February 26, 2020) (tanaikech)
 
   1. Initial release.
 
-[TOP](#top)
