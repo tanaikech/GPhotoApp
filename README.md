@@ -30,6 +30,16 @@ Currently, the Photos Library API is not available under [Advanced Google servic
   ]
 ```
 
+## Public library
+
+I got a contact that the library key had been removed. The script ID of the library is as follows.
+
+```
+1lGrUiaweQjQwVV_QwWuJDJVbCuY2T0BfVphw6VmT85s9LJFntav1wzs9
+```
+
+- How to install the Google Apps Script can be seen at [here](https://developers.google.com/apps-script/guides/libraries#add_a_library_to_your_script_project).
+
 ### Notes
 
 - This library uses modern Javascript. V8 runtime must be [enabled](https://developers.google.com/apps-script/guides/v8-runtime).
